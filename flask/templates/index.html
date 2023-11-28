@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+    <title>Serial Data Display</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.1.2/socket.io.js"></script>
+    <script type="text/javascript" charset="utf-8">
+        var socket = io.connect('http://' + document.domain + ':' + location.port);
+
+        socket.on('serial_data', function(msg) {
+            document.getElementById('serial-data').innerHTML = msg.data;
+        });
+    </script>
+</head>
+<body>
+    <h1>Serial Data Display</h1>
+    <div id="serial-data"></div>
+
+    <form id="inputForm">
+        <label for="inputValue">Input Value:</label>
+        <input type="number" id="inputValue" name="inputValue" required>
+        <button type="button" onclick="sendInput()">Send</button>
+    </form>
+
+    <script type="text/javascript">
+        var socket = io.connect('http://' + document.domain + ':' + location.port);
+
+        function sendInput() {
+            var inputValue = document.getElementById('inputValue').value;
+
+            // Send input value to the server
+            socket.emit('input_value', { value: inputValue });
+        }
+    </script>
+
+</body>
+</html>
