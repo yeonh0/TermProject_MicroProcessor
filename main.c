@@ -20,10 +20,11 @@ void PORT_init (void) {
 	PCC->PCCn[PCC_PORTD_INDEX ]|=PCC_PCCn_CGC_MASK; /* Enable clock for PORTD */
 	
 	PTD->PDDR |= 1<<15|1<<16|1<<0;	/* Data Direction = output */
-	PTC->PDDR &= ~((unsigned int)1<<12);
+	PTC->PDDR &= ~((unsigned int)1<<12&1<<13);
 	PORTC->PCR[12] = PORT_PCR_MUX(1);
+	PORTC->PCR[13] = PORT_PCR_MUX(1);
   PORTD->PCR[15]|=PORT_PCR_MUX(1);           /* Port D15: MUX = GPIO */
-  PORTD->PCR[16]|=PORT_PCR_MUX(1);           /* Port D16: MUX = GPIO */
+  PORTD->PCR[16]|=PORT_PCR_MUX(2);           		/* Port D16: MUX = ALT2, FTM0CH1 */
 	PORTD->PCR[0]|=PORT_PCR_MUX(1);           /* Port D0: MUX = GPIO */
 }
 
@@ -31,6 +32,41 @@ void WDOG_disable (void){
   WDOG->CNT=0xD928C520;     /* Unlock watchdog */
   WDOG->TOVAL=0x0000FFFF;   /* Maximum timeout value */
   WDOG->CS = 0x00002100;    /* Disable watchdog */
+}
+
+void FTM_init (void){
+
+	//FTM0 clocking
+	PCC->PCCn[PCC_FTM0_INDEX] &= ~PCC_PCCn_CGC_MASK;		//Ensure clk diabled for config
+	PCC->PCCn[PCC_FTM0_INDEX] |= PCC_PCCn_PCS(0b010)		//Clocksrc=1, 8MHz SIRCDIV1_CLK
+								| PCC_PCCn_CGC_MASK;		//Enable clock for FTM regs
+
+//FTM0 Initialization
+	FTM0->SC = FTM_SC_PWMEN1_MASK							//Enable PWM channel 1output
+				|FTM_SC_PS(0);								//TOIE(timer overflow Interrupt Ena) = 0 (deafault)
+															//CPWMS(Center aligned PWM Select) =0 (default, up count)
+															/* CLKS (Clock source) = 0 (default, no clock; FTM disabled) 	*/
+															/* PS (Prescaler factor) = 0. Prescaler = 1 					*/
+
+	FTM0->MOD = 8000-1;									//FTM0 counter final value (used for PWM mode)
+															// FTM0 Period = MOD-CNTIN+0x0001~=8000 ctr clks=4ms
+															//8Mhz /1 =8MHz
+	FTM0->CNTIN = FTM_CNTIN_INIT(0);
+
+
+	FTM0->CONTROLS[1].CnSC |=FTM_CnSC_MSB_MASK;
+	FTM0->CONTROLS[1].CnSC |=FTM_CnSC_ELSA_MASK;			/* FTM0 ch1: edge-aligned PWM, low true pulses 		*/
+															/* CHIE (Chan Interrupt Ena) = 0 (default) 			*/
+															/* MSB:MSA (chan Mode Select)=0b10, Edge Align PWM		*/
+															/* ELSB:ELSA (chan Edge/Level Select)=0b10, low true 	*/
+
+}
+
+void FTM0_CH1_PWM (int i){//uint32_t i){
+
+	FTM0->CONTROLS[1].CnV = i;//8000~0 duty; ex(7200=> Duty 0.1 / 800=>Duty 0.9)
+	//start FTM0 counter with clk source = external clock (SOSCDIV1_CLK)
+	FTM0->SC|=FTM_SC_CLKS(3);
 }
 
 
@@ -44,6 +80,8 @@ int main(void)
   NormalRUNmode_80MHz(); /* Init clocks: 80 MHz sysclk & core, 40 MHz bus, 20 MHz flash */
   SystemCoreClockUpdate();
 	ADC_init();  
+	FTM_init();
+
 	
 	PORT_init();           /* Configure ports */
   LPUART1_init();        /* Initialize LPUART @ 9600*/
@@ -54,7 +92,7 @@ int main(void)
 	
 	int click_flag = 0;
 	int btn_flag = 0;
-
+	int D = 0;
   for(;;) {
 		
 		// ADC code
@@ -62,34 +100,43 @@ int main(void)
 		while(adc_complete()==0){}            /* Wait for conversion complete flag 	*/
 		adcResultInMv = read_adc_chx();       /* Get channel's conversion results in mv */
 		
+		
 		if (adcResultInMv > 3750) {           /* If result > 3.75V 		*/	
-			if(click_flag != 1) LPUART1_transmit_string("11111\n\r");
+			if(click_flag != 1) LPUART1_transmit_string("1\n\r");
 			click_flag = 1;
+			D=adcResultInMv*1.6;
+			FTM0_CH1_PWM(D);
 		}
 		else if (adcResultInMv > 2500) {      /* If result > 2.50V 		*/
-		  if(click_flag != 2) LPUART1_transmit_string("22222\n\r");
+		  if(click_flag != 2) LPUART1_transmit_string("0.6666\n\r");
 			click_flag = 2;
+			D=adcResultInMv*1.6;
+			FTM0_CH1_PWM(D);
 		}
 		else if (adcResultInMv >1250) {       /* If result > 1.25V 		*/
-		  if(click_flag != 3) LPUART1_transmit_string("33333\n\r");
+		  if(click_flag != 3) LPUART1_transmit_string("0.3333\n\r");
 			click_flag = 3;
+			D=adcResultInMv*1.6;
+			FTM0_CH1_PWM(D);
 		}
 		else {
-		  if(click_flag != 4) LPUART1_transmit_string("44444\n\r");
+		  if(click_flag != 4) LPUART1_transmit_string("0\n\r");
 			click_flag = 4;
+			D=adcResultInMv*1.6;
+			FTM0_CH1_PWM(D);
 		}
 		
 		// Button & LED code
 	  if(PTC->PDIR &(1<<12)){ 	// if button on
 			if(btn_flag == 0){
 			btn_flag = 1;
-			LPUART1_transmit_string("Clicked!!\n\r"); /* Transmit char string */
+			LPUART1_transmit_string("L\n\r"); /* Transmit char string */
 		}
 		PTD->PCOR |= 1<<0;
 	}
 		else {
 			if(btn_flag == 1) {
-				LPUART1_transmit_string("Free!!\n\r");
+				LPUART1_transmit_string("F\n\r");
 				btn_flag = 0;
 			}
 			PTD->PSOR |= 1<<0;

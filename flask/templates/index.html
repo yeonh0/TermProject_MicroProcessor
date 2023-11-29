@@ -1,15 +1,25 @@
 <!doctype html>
 <html>
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport">
+    <link rel="stylesheet" href="../static/styles.css">
+
     <title>Serial Data Display</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.1.2/socket.io.js"></script>
     <script type="text/javascript" charset="utf-8">
         var socket = io.connect('http://' + document.domain + ':' + location.port);
 
+        var nowspeed = 0;
         socket.on('serial_data', function(msg) {
             document.getElementById('serial-data').innerHTML = msg.data;
+
+            if(msg.data == "L"){draw(nowspeed, 0, 0, 0, {'left':  true, 'right': false}, 0);}
+            else if(msg.data == "F"){draw(nowspeed, 0, 0, 0, {'left':  false, 'right': false}, 0);}
+            else{nowspeed = msg.data; draw(nowspeed, 0, 0, 0, {'left':  false, 'right': false}, 0);}
         });
     </script>
+
 </head>
 <body>
     <h1>Serial Data Display</h1>
@@ -32,5 +42,13 @@
         }
     </script>
 
+<br><br>
+<div id="speedometer">
+    <div style="display: none;"><img id="sprite" src="../static/images/icons.svg"></div>
+    <canvas id="canvas" width="425" height="210"></canvas>
+</div>
+<script src="../static/fraction.min.js"></script>
+<script src="../static/speedometer.js"></script>
+<script src="../static/demo.js"></script>
 </body>
 </html>
