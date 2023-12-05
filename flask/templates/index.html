@@ -12,24 +12,30 @@
 
         var nowspeed = 0;
         socket.on('serial_data', function(msg) {
-            document.getElementById('serial-data').innerHTML = msg.data;
+            
+            givenstruct = msg.data;
+            nowspeed = parseInt(msg.data / 10);
+            leftturn = msg.data%10;
 
-            if(msg.data == "L"){draw(nowspeed, 0, 0, 0, {'left':  true, 'right': false}, 0);}
-            else if(msg.data == "F"){draw(nowspeed, 0, 0, 0, {'left':  false, 'right': false}, 0);}
-            else{nowspeed = msg.data; draw(nowspeed, 0, 0, 0, {'left':  false, 'right': false}, 0);}
+            document.getElementById('serial-data').innerHTML = parseInt(givenstruct/5000*200) + ' km';
+            
+            nowspeed = msg.data; draw(givenstruct/5000, 0, 0, 0, {'left':  false, 'right': false}, 0);
+            console.log(nowspeed, leftturn);
         });
     </script>
 
 </head>
 <body>
-    <h1>Serial Data Display</h1>
-    <div id="serial-data"></div>
-
-    <form id="inputForm">
-        <label for="inputValue">Input Value:</label>
-        <input type="number" id="inputValue" name="inputValue" required>
-        <button type="button" onclick="sendInput()">Send</button>
-    </form>
+    <div id="headbox">
+        <h1 id="headline">Serial Data Display</h1>
+        <div id="serial-data"></div>
+        
+        <form id="inputForm">
+            <label for="inputValue">Input Value:</label>
+            <input type="number" id="inputValue" name="inputValue" required>
+            <button type="button" onclick="sendInput()">Send</button>
+        </form>
+    </div>
 
     <script type="text/javascript">
         var socket = io.connect('http://' + document.domain + ':' + location.port);
@@ -43,9 +49,11 @@
     </script>
 
 <br><br>
-<div id="speedometer">
-    <div style="display: none;"><img id="sprite" src="../static/images/icons.svg"></div>
-    <canvas id="canvas" width="425" height="210"></canvas>
+<div id="speedbox">
+    <div id="speedometer">
+        <div style="display: none;"><img id="sprite" src="../static/images/icons.svg"></div>
+        <canvas id="canvas" width="425" height="210"></canvas>
+    </div>
 </div>
 <script src="../static/fraction.min.js"></script>
 <script src="../static/speedometer.js"></script>

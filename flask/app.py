@@ -13,7 +13,7 @@ def index():
     return render_template('index.html')
 
 # 시리얼 포트 설정 (COM5, 9600 bps)
-ser = serial.Serial('COM9', 9600)
+ser = serial.Serial('COM5', 9600)
 
 # 큐 생성
 serial_queue = Queue(maxsize=10)  # 큐 사이즈 설정

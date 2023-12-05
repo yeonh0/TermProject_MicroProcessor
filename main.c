@@ -1,17 +1,13 @@
-/*
- * main.c       UART transmission simple example
- * 2016 Mar 17 O Romero - Initial version
- * 2016 Oct 31 SM: Clocks adjusted for 160 MHz SPLL
- *
- */
-
-//#include "S32K144.h" /* include peripheral declarations S32K144 */
 #include "device_registers.h"           // Device header
 #include "clocks_and_modes.h"
 #include "LPUART.h"
 #include "ADC.h"
+#include <stdio.h>
+#include <string.h>
 
+int lpit0_ch0_flag_counter = 0; /*< LPIT0 timeout counter */
 char data=0;
+
 void PORT_init (void) {
   PCC->PCCn[PCC_PORTC_INDEX ]|=PCC_PCCn_CGC_MASK; /* Enable clock for PORTC */
   PORTC->PCR[6]|=PORT_PCR_MUX(2);           /* Port C6: MUX = ALT2,UART1 TX */
@@ -69,6 +65,48 @@ void FTM0_CH1_PWM (int i){//uint32_t i){
 	FTM0->SC|=FTM_SC_CLKS(3);
 }
 
+void LPIT0_init (uint32_t delay)
+{
+   uint32_t timeout;
+
+	/*!
+	    * LPIT Clocking:
+	    * ==============================
+	    */
+	  PCC->PCCn[PCC_LPIT_INDEX] = PCC_PCCn_PCS(6);    /* Clock Src = 6 (SPLL2_DIV2_CLK)*/
+	  PCC->PCCn[PCC_LPIT_INDEX] |= PCC_PCCn_CGC_MASK; /* Enable clk to LPIT0 regs       */
+
+	  /*!
+	   * LPIT Initialization:
+	   */
+	  LPIT0->MCR |= LPIT_MCR_M_CEN_MASK;  /* DBG_EN-0: Timer chans stop in Debug mode */
+	                                        /* DOZE_EN=0: Timer chans are stopped in DOZE mode */
+	                                        /* SW_RST=0: SW reset does not reset timer chans, regs */
+	                                        /* M_CEN=1: enable module clk (allows writing other LPIT0 regs) */
+
+  timeout=delay* 40;
+  LPIT0->TMR[0].TVAL = timeout;      /* Chan 0 Timeout period: 40M clocks */
+  LPIT0->TMR[0].TCTRL |= LPIT_TMR_TCTRL_T_EN_MASK;
+                                     /* T_EN=1: Timer channel is enabled */
+                              /* CHAIN=0: channel chaining is disabled */
+                              /* MODE=0: 32 periodic counter mode */
+                              /* TSOT=0: Timer decrements immediately based on restart */
+                              /* TSOI=0: Timer does not stop after timeout */
+                              /* TROT=0 Timer will not reload on trigger */
+                              /* TRG_SRC=0: External trigger soruce */
+                              /* TRG_SEL=0: Timer chan 0 trigger source is selected*/
+}
+
+void delay_us (volatile int us){
+   LPIT0_init(us);           /* Initialize PIT0 for 1 second timeout  */
+   while (0 == (LPIT0->MSR & LPIT_MSR_TIF0_MASK)) {} /* Wait for LPIT0 CH0 Flag */
+               lpit0_ch0_flag_counter++;         /* Increment LPIT0 timeout counter */
+               LPIT0->MSR |= LPIT_MSR_TIF0_MASK; /* Clear LPIT0 timer flag 0 */
+}
+
+void uint32ToString(uint32_t value, char* result) {
+    sprintf(result, "%u", value);
+}
 
 int main(void)
 {
@@ -89,9 +127,9 @@ int main(void)
   LPUART1_transmit_string("Input character to echo...\n\r"); /* Transmit char string */
 	
 	PTD->PSOR |= 1<<15|1<<16|1<<0; /* turn off all LEDs */
-	
-	int click_flag = 0;
-	int btn_flag = 0;
+
+	char btn_flag = 0;
+	char myspeed[10];
 	int D = 0;
   for(;;) {
 		
@@ -100,73 +138,28 @@ int main(void)
 		while(adc_complete()==0){}            /* Wait for conversion complete flag 	*/
 		adcResultInMv = read_adc_chx();       /* Get channel's conversion results in mv */
 		
-		
-		if (adcResultInMv > 3750) {           /* If result > 3.75V 		*/	
-			if(click_flag != 1) LPUART1_transmit_string("1\n\r");
-			click_flag = 1;
-			D=adcResultInMv*1.6;
-			FTM0_CH1_PWM(D);
+			// Button 
+			// PTC 12 flag : 1, PTC 13 flag : 2, no btn : 0
+	  if(PTC->PDIR &(1<<12)){ 	
+			btn_flag = '1';
+		  PTD->PCOR |= 1<<0;
 		}
-		else if (adcResultInMv > 2500) {      /* If result > 2.50V 		*/
-		  if(click_flag != 2) LPUART1_transmit_string("0.6666\n\r");
-			click_flag = 2;
-			D=adcResultInMv*1.6;
-			FTM0_CH1_PWM(D);
-		}
-		else if (adcResultInMv >1250) {       /* If result > 1.25V 		*/
-		  if(click_flag != 3) LPUART1_transmit_string("0.3333\n\r");
-			click_flag = 3;
-			D=adcResultInMv*1.6;
-			FTM0_CH1_PWM(D);
-		}
-		else {
-		  if(click_flag != 4) LPUART1_transmit_string("0\n\r");
-			click_flag = 4;
-			D=adcResultInMv*1.6;
-			FTM0_CH1_PWM(D);
-		}
-		
-		// Button & LED code
-	  if(PTC->PDIR &(1<<12)){ 	// if button on
-			if(btn_flag == 0){
-			btn_flag = 1;
-			LPUART1_transmit_string("L\n\r"); /* Transmit char string */
-		}
-		PTD->PCOR |= 1<<0;
-	}
-		else {
-			if(btn_flag == 1) {
-				LPUART1_transmit_string("F\n\r");
-				btn_flag = 0;
+		else if(PTC->PDIR & (1<<13)){
+				btn_flag = '2';
+				PTD->PCOR |= 1<<15;
 			}
-			PTD->PSOR |= 1<<0;
+		else {
+			btn_flag = '0';
+			PTD->PSOR |= 1<<0|1<<15;
 		}
 		
-		if (LPUART1_available()) {
-        // ?? ?? ??
-        data = LPUART1_receive_char();
-        LPUART1_transmit_char(data);
-        // ??? ???? ?? ?? ??
-        switch(data) {
-            case '1':
-                PTD->PCOR |= 1<<15;
-                PTD->PSOR |= 1<<16|1<<0;
-						LPUART1_transmit_string(" : Red Light On!!\n\r");
-                break;
-            
-            case '2':
-                PTD->PCOR |= 1<<16;
-                PTD->PSOR |= 1<<15|1<<0;
-						LPUART1_transmit_string(" : Green Light On!!\n\r");
-                break;
-            
-            case '3':
-                PTD->PSOR |= 1<<15|1<<16;
-						LPUART1_transmit_string(" : Light Off!!\n\r");
-                break;
-        }
-    }
-		
+		uint32ToString(adcResultInMv, myspeed);
+			
+
+    strcat(myspeed, "\n");
+
+		LPUART1_transmit_string(myspeed);
+		delay_us(60000);
   }
 }
 
