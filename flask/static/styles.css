@@ -1,0 +1,38 @@
+body {
+    background-color:#c8c1e4; 
+    margin: 0; 
+    padding: 0; 
+}
+
+#headbox {
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items: center;
+}
+
+
+#headline {
+    font-family:'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+    font-weight: 600;
+    color:#6d80a6;
+}
+
+#serial-data {
+    font-family:'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+    font-weight: 600;
+    color:#6d80a6;
+}
+
+#speedbox {
+    display:flex;
+    justify-content: center;
+}
+
+#speedometer {
+    background-color:#a2a4dd;
+    display:flex;
+    justify-content: center;
+    width: 500px;
+
+}
